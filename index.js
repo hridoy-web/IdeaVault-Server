@@ -1,5 +1,5 @@
 // step: 1
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
@@ -23,14 +23,33 @@ const client = new MongoClient(uri, {
 });
 async function run() {
     try {
-        // Connect the client to the server	(optional starting in v4.7)
+
         await client.connect();
-        // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
+
+        // database connection
+        const db = client.db("ideaVaultDB");
+        const ideasCollection = db.collection("ideas");
+
+        // ideas section get route
+        app.get('/ideas', async (req, res) => {
+            const cursor = ideasCollection.find();
+            const result = await cursor.toArray();
+            res.send(result);
+        })
+
+        // single id 
+        app.get('/ideas/:ideasId', async (req, res) => {
+            const { ideasId } = req.params;
+            // console.log(ideasId);
+            const query = { _id: new ObjectId(ideasId) }
+            const result = await ideasCollection.findOne(query);
+            res.send(result)
+        })
+
+        // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
-        // Ensures that the client will close when you finish/error
-        // await client.close();
+
     }
 }
 run().catch(console.dir);
