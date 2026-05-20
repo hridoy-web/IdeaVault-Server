@@ -37,7 +37,14 @@ async function run() {
             res.send(result);
         })
 
-        // single id 
+        // home page trending section 6 data 
+        app.get("/trending-ideas", async (req, res) => {
+            const cursor = ideasCollection.find().limit(6);
+            const result = await cursor.toArray();
+            res.send(result);
+        })
+
+        // ideas single (id) data
         app.get('/ideas/:ideasId', async (req, res) => {
             const { ideasId } = req.params;
             // console.log(ideasId);
