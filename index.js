@@ -33,7 +33,7 @@ async function run() {
         // ideas section get route
         app.get('/ideas', async (req, res) => {
             const cursor = ideasCollection.find();
-            const result = await cursor.toArray();
+            const result = await ideasCollection.find().sort({ _id: -1 }).toArray();
             res.send(result);
         })
 
@@ -52,6 +52,18 @@ async function run() {
             const result = await ideasCollection.findOne(query);
             res.send(result)
         })
+
+        app.post('/add-ideas', async (req, res) => {
+            try {
+                const destinationData = req.body;
+                console.log(destinationData);
+                const result = await ideasCollection.insertOne(destinationData);
+                res.send(result);
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({ message: "Internal Server Error" });
+            }
+        });
 
         // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
