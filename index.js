@@ -21,6 +21,18 @@ const client = new MongoClient(uri, {
         deprecationErrors: true,
     }
 });
+
+const logger = (req, res, next) => {
+    console.log(`${req.method} | ${req.url}`);
+    next();
+}
+
+const verifyToken = async (req, res, next) => {
+    const { authorization } = req.headers;
+    // console.log(req.headers, "from verify token");
+    next();
+}
+
 async function run() {
     try {
 
@@ -45,7 +57,7 @@ async function run() {
         })
 
         // ideas single (id) data
-        app.get('/ideas/:ideasId', async (req, res) => {
+        app.get('/ideas/:ideasId', logger, verifyToken, async (req, res) => {
             const { ideasId } = req.params;
             // console.log(ideasId);
             const query = { _id: new ObjectId(ideasId) }
@@ -56,7 +68,7 @@ async function run() {
         app.post('/add-ideas', async (req, res) => {
             try {
                 const destinationData = req.body;
-                console.log(destinationData);
+                // console.log(destinationData);
                 const result = await ideasCollection.insertOne(destinationData);
                 res.send(result);
             } catch (error) {
@@ -64,6 +76,7 @@ async function run() {
                 res.status(500).send({ message: "Internal Server Error" });
             }
         });
+
 
         // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
