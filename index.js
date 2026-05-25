@@ -2,6 +2,7 @@
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const express = require('express');
 const cors = require('cors');
+const { createRemoteJWKSet, jwtVerify } = require('jose-cjs');
 require('dotenv').config();
 
 //step: 2
@@ -13,6 +14,12 @@ app.use(cors());
 app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.j6a6juf.mongodb.net/?appName=Cluster0`
+
+const JWKS = createRemoteJWKSet(
+    new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
+)
+
+console.log(JWKS);
 
 const client = new MongoClient(uri, {
     serverApi: {
@@ -29,8 +36,26 @@ const logger = (req, res, next) => {
 
 const verifyToken = async (req, res, next) => {
     const { authorization } = req.headers;
-    // console.log(req.headers, "from verify token");
-    next();
+    const token = authorization?.split(' ')[1]
+
+
+    if (!token) {
+        return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    try {
+        const JWKS = createRemoteJWKSet(
+            new URL('http://localhost:3000/api/auth/jwks')
+        );
+        const { payload } = await jwtVerify(token, JWKS);
+        console.log("Verified Payload:", payload);
+        req.user = payload;
+        next();
+
+    } catch (error) {
+        console.error('Token validation failed:', error);
+        return res.status(401).json({ message: 'Unauthorized' });
+    }
 }
 
 async function run() {
