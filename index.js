@@ -38,7 +38,6 @@ const verifyToken = async (req, res, next) => {
     const { authorization } = req.headers;
     const token = authorization?.split(' ')[1]
 
-
     if (!token) {
         return res.status(401).json({ message: 'Unauthorized' });
     }
@@ -67,12 +66,24 @@ async function run() {
         const db = client.db("ideaVaultDB");
         const ideasCollection = db.collection("ideas");
 
-        // ideas section get route
+        // ideas route
         app.get('/ideas', async (req, res) => {
-            const cursor = ideasCollection.find();
-            const result = await ideasCollection.find().sort({ _id: -1 }).toArray();
-            res.send(result);
-        })
+            const { search } = req.query;
+            let query = {};
+
+            // search functionality
+            if (search) {
+                query = { ideaTitle: { $regex: search, $options: 'i' } };
+            }
+
+            try {
+                const result = await ideasCollection.find(query).sort({ _id: -1 }).toArray();
+                // console.log(result);
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ message: "No Data Available" });
+            }
+        });
 
         // home page trending section 6 data 
         app.get("/trending-ideas", async (req, res) => {
