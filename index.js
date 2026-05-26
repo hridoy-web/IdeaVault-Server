@@ -36,26 +36,30 @@ const logger = (req, res, next) => {
 
 const verifyToken = async (req, res, next) => {
     const { authorization } = req.headers;
-    const token = authorization?.split(' ')[1]
+
+    const token = authorization?.split(' ')[1];
 
     if (!token) {
         return res.status(401).json({ message: 'Unauthorized' });
     }
 
     try {
+
         const JWKS = createRemoteJWKSet(
-            new URL('http://localhost:3000/api/auth/jwks')
+            new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
         );
+
         const { payload } = await jwtVerify(token, JWKS);
-        console.log("Verified Payload:", payload);
+
         req.user = payload;
+
         next();
 
     } catch (error) {
-        console.error('Token validation failed:', error);
+        console.error(error);
         return res.status(401).json({ message: 'Unauthorized' });
     }
-}
+};
 
 async function run() {
     try {
@@ -66,24 +70,25 @@ async function run() {
         const db = client.db("ideaVaultDB");
         const ideasCollection = db.collection("ideas");
 
-        // ideas route
+        // ideas page get route
         app.get('/ideas', async (req, res) => {
-            const { search } = req.query;
+            const { search, category } = req.query;
             let query = {};
 
-            // search functionality
+            // search
             if (search) {
-                query = { ideaTitle: { $regex: search, $options: 'i' } };
+                query.ideaTitle = { $regex: search, $options: 'i' };
             }
 
-            try {
-                const result = await ideasCollection.find(query).sort({ _id: -1 }).toArray();
-                // console.log(result);
-                res.send(result);
-            } catch (error) {
-                res.status(500).send({ message: "No Data Available" });
+            // category filter
+            if (category && category !== 'All') {
+                query.category = category;
             }
+
+            const result = await ideasCollection.find(query).sort({ _id: -1 }).toArray();
+            res.send(result);
         });
+
 
         // home page trending section 6 data 
         app.get("/trending-ideas", async (req, res) => {
@@ -113,6 +118,92 @@ async function run() {
             }
         });
 
+        app.get('/my-ideas', async (req, res) => {
+
+            try {
+
+                const email = req.query.email;
+
+                console.log(email);
+
+                const query = {
+                    userEmail: email
+                };
+
+                const result = await ideasCollection
+                    .find(query)
+                    .sort({ _id: -1 })
+                    .toArray();
+
+                res.send(result);
+
+            } catch (error) {
+
+                console.error(error);
+
+                res.status(500).send({
+                    message: "Internal Server Error"
+                });
+            }
+        });
+
+
+        app.patch('/update-idea/:id', async (req, res) => {
+
+            try {
+
+                const { id } = req.params;
+
+                const updatedIdea = req.body;
+
+                const filter = {
+                    _id: new ObjectId(id)
+                };
+
+                const updatedDoc = {
+                    $set: updatedIdea
+                };
+
+                const result = await ideasCollection.updateOne(
+                    filter,
+                    updatedDoc
+                );
+
+                res.send(result);
+
+            } catch (error) {
+
+                console.error(error);
+
+                res.status(500).send({
+                    message: "Internal Server Error"
+                });
+            }
+        });
+
+        app.delete('/delete-idea/:id', async (req, res) => {
+
+            try {
+
+                const { id } = req.params;
+
+                const query = {
+                    _id: new ObjectId(id)
+                };
+
+                const result = await ideasCollection.deleteOne(query);
+
+                res.send(result);
+
+            } catch (error) {
+
+                console.error(error);
+
+                res.status(500).send({
+                    message: "Internal Server Error"
+                });
+            }
+        });
 
         // await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
