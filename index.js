@@ -1,25 +1,21 @@
-// step: 1
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const express = require('express');
 const cors = require('cors');
 const { createRemoteJWKSet, jwtVerify } = require('jose-cjs');
 require('dotenv').config();
 
-//step: 2
 const app = express();
 const port = process.env.PORT || 5000;
 
-// step: 3 - midleware setup
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.j6a6juf.mongodb.net/?appName=Cluster0`
-
 const JWKS = createRemoteJWKSet(
     new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
-)
+);
 
-console.log(JWKS);
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.j6a6juf.mongodb.net/?appName=Cluster0`;
 
 const client = new MongoClient(uri, {
     serverApi: {
@@ -29,14 +25,15 @@ const client = new MongoClient(uri, {
     }
 });
 
+// Request logger
 const logger = (req, res, next) => {
     console.log(`${req.method} | ${req.url}`);
     next();
-}
+};
 
+// Token verification middleware
 const verifyToken = async (req, res, next) => {
     const { authorization } = req.headers;
-
     const token = authorization?.split(' ')[1];
 
     if (!token) {
@@ -44,17 +41,9 @@ const verifyToken = async (req, res, next) => {
     }
 
     try {
-
-        const JWKS = createRemoteJWKSet(
-            new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
-        );
-
         const { payload } = await jwtVerify(token, JWKS);
-
         req.user = payload;
-
         next();
-
     } catch (error) {
         console.error(error);
         return res.status(401).json({ message: 'Unauthorized' });
@@ -63,162 +52,143 @@ const verifyToken = async (req, res, next) => {
 
 async function run() {
     try {
-
         await client.connect();
+        console.log("Connected to MongoDB!");
 
-        // database connection
         const db = client.db("ideaVaultDB");
         const ideasCollection = db.collection("ideas");
+        const commentsCollection = db.collection("comments");
 
-        // ideas page get route
+        // Routes
         app.get('/ideas', async (req, res) => {
             const { search, category } = req.query;
             let query = {};
 
-            // search
-            if (search) {
-                query.ideaTitle = { $regex: search, $options: 'i' };
-            }
-
-            // category filter
-            if (category && category !== 'All') {
-                query.category = category;
-            }
+            if (search) query.ideaTitle = { $regex: search, $options: 'i' };
+            if (category && category !== 'All') query.category = category;
 
             const result = await ideasCollection.find(query).sort({ _id: -1 }).toArray();
             res.send(result);
         });
 
-
-        // home page trending section 6 data 
         app.get("/trending-ideas", async (req, res) => {
-            const cursor = ideasCollection.find().limit(6);
-            const result = await cursor.toArray();
+            const result = await ideasCollection.find().limit(6).toArray();
             res.send(result);
-        })
+        });
 
-        // ideas single (id) data
         app.get('/ideas/:ideasId', logger, verifyToken, async (req, res) => {
             const { ideasId } = req.params;
-            // console.log(ideasId);
-            const query = { _id: new ObjectId(ideasId) }
-            const result = await ideasCollection.findOne(query);
-            res.send(result)
-        })
+            const result = await ideasCollection.findOne({ _id: new ObjectId(ideasId) });
+            res.send(result);
+        });
 
         app.post('/add-ideas', async (req, res) => {
             try {
-                const destinationData = req.body;
-                // console.log(destinationData);
-                const result = await ideasCollection.insertOne(destinationData);
+                const result = await ideasCollection.insertOne(req.body);
                 res.send(result);
             } catch (error) {
-                console.error(error);
                 res.status(500).send({ message: "Internal Server Error" });
             }
         });
 
         app.get('/my-ideas', async (req, res) => {
-
             try {
-
-                const email = req.query.email;
-
-                console.log(email);
-
-                const query = {
-                    userEmail: email
-                };
-
-                const result = await ideasCollection
-                    .find(query)
-                    .sort({ _id: -1 })
-                    .toArray();
-
+                const result = await ideasCollection.find({ userEmail: req.query.email }).sort({ _id: -1 }).toArray();
                 res.send(result);
-
             } catch (error) {
-
-                console.error(error);
-
-                res.status(500).send({
-                    message: "Internal Server Error"
-                });
+                res.status(500).send({ message: "Internal Server Error" });
             }
         });
 
-
         app.patch('/update-idea/:id', async (req, res) => {
-
             try {
-
-                const { id } = req.params;
-
-                const updatedIdea = req.body;
-
-                const filter = {
-                    _id: new ObjectId(id)
-                };
-
-                const updatedDoc = {
-                    $set: updatedIdea
-                };
-
                 const result = await ideasCollection.updateOne(
-                    filter,
-                    updatedDoc
+                    { _id: new ObjectId(req.params.id) },
+                    { $set: req.body }
                 );
-
                 res.send(result);
-
             } catch (error) {
-
-                console.error(error);
-
-                res.status(500).send({
-                    message: "Internal Server Error"
-                });
+                res.status(500).send({ message: "Internal Server Error" });
             }
         });
 
         app.delete('/delete-idea/:id', async (req, res) => {
-
             try {
-
-                const { id } = req.params;
-
-                const query = {
-                    _id: new ObjectId(id)
-                };
-
-                const result = await ideasCollection.deleteOne(query);
-
+                const result = await ideasCollection.deleteOne({ _id: new ObjectId(req.params.id) });
                 res.send(result);
-
             } catch (error) {
-
-                console.error(error);
-
-                res.status(500).send({
-                    message: "Internal Server Error"
-                });
+                res.status(500).send({ message: "Internal Server Error" });
             }
         });
 
-        // await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
-    } finally {
+      // Comments routes 
+app.post("/comments", async (req, res) => {
+    try {
+        const { ideaId, userName, userEmail, userImage, text, createdAt } = req.body;
+        const commentToSave = {
+            ideaId,
+            userName,
+            userEmail,
+            userImage,
+            text: typeof text === 'object' ? text.text || "" : text,
+            createdAt
+        };
 
+        const result = await commentsCollection.insertOne(commentToSave);
+        res.send({ success: true, insertedId: result.insertedId });
+    } catch (error) {
+        res.status(500).send({ success: false, message: "Failed to add comment" });
+    }
+});
+
+        app.get("/comments/:ideaId", async (req, res) => {
+            try {
+                const result = await commentsCollection.find({ ideaId: req.params.ideaId }).sort({ createdAt: -1 }).toArray();
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ success: false, message: "Failed to fetch comments" });
+            }
+        });
+
+        app.patch("/comments/:id", async (req, res) => {
+            try {
+                const result = await commentsCollection.updateOne(
+                    { _id: new ObjectId(req.params.id) },
+                    { $set: { text: req.body.text } }
+                );
+                res.send({ success: true, result });
+            } catch (error) {
+                res.status(500).send({ success: false, message: "Failed to update comment" });
+            }
+        });
+
+        app.delete("/comments/:id", async (req, res) => {
+            try {
+                const result = await commentsCollection.deleteOne({ _id: new ObjectId(req.params.id) });
+                res.send({ success: true, result });
+            } catch (error) {
+                res.status(500).send({ success: false, message: "Failed to delete comment" });
+            }
+        });
+
+        // my interactions page 
+        app.get("/my-interactions", async (req, res) => {
+            try {
+                const email = req.query.email;
+                const query = { userEmail: email };
+                const result = await commentsCollection.find(query).sort({ createdAt: -1 }).toArray();
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ message: "Failed to fetch interactions" });
+            }
+        });
+
+    } finally {
+       
     }
 }
 run().catch(console.dir);
 
-// 
-app.get('/', (req, res) => {
-    res.send('IdeaVault Server is running')
-})
+app.get('/', (req, res) => res.send('IdeaVault Server is running'));
 
-// server listening 
-app.listen(port, () => {
-    console.log(`server is runing port ${port}`)
-})
+app.listen(port, () => console.log(`Server running on port ${port}`));
