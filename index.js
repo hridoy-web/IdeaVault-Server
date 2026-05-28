@@ -34,6 +34,7 @@ const logger = (req, res, next) => {
 // Token verification middleware
 const verifyToken = async (req, res, next) => {
     const { authorization } = req.headers;
+    console.log("Received Auth Header:", authorization);
     const token = authorization?.split(' ')[1];
 
     if (!token) {
@@ -52,7 +53,8 @@ const verifyToken = async (req, res, next) => {
 
 async function run() {
     try {
-        await client.connect();
+        // await client.connect();
+
         console.log("Connected to MongoDB!");
 
         const db = client.db("ideaVaultDB");
@@ -61,14 +63,24 @@ async function run() {
 
         // Routes
         app.get('/ideas', async (req, res) => {
+             console.log();
             const { search, category } = req.query;
             let query = {};
 
-            if (search) query.ideaTitle = { $regex: search, $options: 'i' };
-            if (category && category !== 'All') query.category = category;
+            if (search && search !== 'undefined') {
+                query.ideaTitle = { $regex: search, $options: 'i' };
+            }
 
-            const result = await ideasCollection.find(query).sort({ _id: -1 }).toArray();
-            res.send(result);
+            if (category && category !== 'All') {
+                query.category = category;
+            }
+
+            try {
+                const result = await ideasCollection.find(query).sort({ _id: -1 }).toArray();
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ message: "Error fetching ideas" });
+            }
         });
 
         app.get("/trending-ideas", async (req, res) => {
@@ -76,7 +88,7 @@ async function run() {
             res.send(result);
         });
 
-        app.get('/ideas/:ideasId', logger, verifyToken, async (req, res) => {
+        app.get('/ideas/:ideasId', logger, async (req, res) => {
             const { ideasId } = req.params;
             const result = await ideasCollection.findOne({ _id: new ObjectId(ideasId) });
             res.send(result);
@@ -121,25 +133,25 @@ async function run() {
             }
         });
 
-      // Comments routes 
-app.post("/comments", async (req, res) => {
-    try {
-        const { ideaId, userName, userEmail, userImage, text, createdAt } = req.body;
-        const commentToSave = {
-            ideaId,
-            userName,
-            userEmail,
-            userImage,
-            text: typeof text === 'object' ? text.text || "" : text,
-            createdAt
-        };
+        // Comments routes 
+        app.post("/comments", async (req, res) => {
+            try {
+                const { ideaId, userName, userEmail, userImage, text, createdAt } = req.body;
+                const commentToSave = {
+                    ideaId,
+                    userName,
+                    userEmail,
+                    userImage,
+                    text: typeof text === 'object' ? text.text || "" : text,
+                    createdAt
+                };
 
-        const result = await commentsCollection.insertOne(commentToSave);
-        res.send({ success: true, insertedId: result.insertedId });
-    } catch (error) {
-        res.status(500).send({ success: false, message: "Failed to add comment" });
-    }
-});
+                const result = await commentsCollection.insertOne(commentToSave);
+                res.send({ success: true, insertedId: result.insertedId });
+            } catch (error) {
+                res.status(500).send({ success: false, message: "Failed to add comment" });
+            }
+        });
 
         app.get("/comments/:ideaId", async (req, res) => {
             try {
@@ -184,11 +196,15 @@ app.post("/comments", async (req, res) => {
         });
 
     } finally {
-       
+
     }
 }
 run().catch(console.dir);
 
-app.get('/', (req, res) => res.send('IdeaVault Server is running'));
+app.get('/', (req, res) => {
+    res.send('IdeaVault Server is running')
+});
 
-app.listen(port, () => console.log(`Server running on port ${port}`));
+app.listen(port, () => {
+    console.log(`Server running on port ${port}`)
+});
